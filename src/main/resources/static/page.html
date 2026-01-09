@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>操作系统课程设计演示系统</title>
+    <!-- 引入 Bootstrap 美化界面 -->
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <!-- 引入 Chart.js 用于画图 -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body { background-color: #f8f9fa; padding: 20px; }
+        .module-card { display: none; } /* 默认隐藏所有模块 */
+        .active-module { display: block; } /* 显示当前模块 */
+        .memory-bar { height: 50px; display: flex; border: 1px solid #333; border-radius: 5px; overflow: hidden; margin-top: 10px;}
+        .mem-block {
+            display: flex;
+            flex-direction: column; /* 垂直排列 */
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            transition: 0.3s;
+            position: relative; /* 用于 tooltip */
+        }
+        .mem-block:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+        .tooltip-text {
+            visibility: hidden;
+            opacity: 0;
+            width: max-content; /* 根据内容调整宽度 */
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px 10px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%; /* 定位在块的上方 */
+            left: 50%;
+            transform: translateX(-50%);
+            transition: opacity 0.3s;
+            font-size: 10px;
+            white-space: nowrap; /* 不换行 */
+        }
+        .tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent;
+        }
+
+        .nav-pills .nav-link.active { background-color: #0d6efd; }
+        .log-entry {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+        .log-page {
+            font-weight: bold;
+            width: 50px;
+            text-align: center;
+        }
+        .log-frames {
+            display: flex;
+            gap: 5px;
+        }
+        .log-frame-block {
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            background-color: #fff;
+        }
+        .log-status {
+            margin-left: auto;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-size: 0.85em;
+        }
+        .status-miss { background-color: #ffe0b2; color: #e65100; } /* Orange */
+        .status-hit { background-color: #c8e6c9; color: #2e7d32; } /* Green */
+        .status-replace { background-color: #ffcdd2; color: #c62828; } /* Red */
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 class="text-center mb-4">操作系统课程设计演示平台</h2>
+
+    <!-- 导航栏：切换四个模块 -->
+    <ul class="nav nav-pills nav-fill mb-4 bg-white p-2 rounded shadow-sm">
+        <li class="nav-item"><a class="nav-link active" href="#" onclick="switchModule('process', event)">1. 进程管理</a></li>
+        <li class="nav-item"><a class="nav-link" href="#" onclick="switchModule('memory', event)">2. 存储器管理</a></li>
+        <li class="nav-item"><a class="nav-link" href="#" onclick="switchModule('vm', event)">3. 虚拟存储器</a></li>
+        <li class="nav-item"><a class="nav-link" href="#" onclick="switchModule('disk', event)">4. 文件/磁盘管理</a></li>
+    </ul>
+
+    <!-- 模块1：进程管理 -->
+    <div id="process" class="card shadow module-card active-module">
+        <div class="card-header bg-primary text-white">进程管理 (PCB与调度)</div>
+        <div class="card-body">
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <label for="process-name-input" class="form-label">进程名称</label>
+                    <input type="text" class="form-control" id="process-name-input" placeholder="例如: P1">
+                </div>
+                <div class="col-md-3">
+                    <label for="process-arrive-time-input" class="form-label">到达时间</label>
+                    <input type="number" class="form-control" id="process-arrive-time-input" placeholder="进程到达系统的时间" value="0">
+                </div>
+                <div class="col-md-2">
+                    <label for="process-service-time-input" class="form-label">服务时间</label>
+                    <input type="number" class="form-control" id="process-service-time-input" placeholder="需要CPU的总时间" value="5">
+                </div>
+                <div class="col-md-2">
+                    <label for="process-priority-input" class="form-label">优先级</label>
+                    <input type="number" class="form-control" id="process-priority-input" placeholder="数值越大优先级越高" value="1">
+                    <small class="text-muted">仅在最高优先级调度算法中生效</small>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button class="btn btn-success w-100" onclick="addProcess()">创建进程</button>
+                </div>
+            </div>
+            <hr>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <select class="form-select w-auto" id="process-algorithm-select">
+                    <option value="RR">时间片轮转 (RR)</option>
+                    <option value="FCFS">先来先服务 (FCFS)</option>
+                    <option value="SJF">最短作业优先 (SJF)</option>
+                    <option value="Priority">最高优先级 (Priority)</option>
+                </select>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-secondary" onclick="resetProcessSimulation()">重置模拟</button>
+                    <button class="btn btn-danger" onclick="runProcessSimulation('step')">单步模拟</button>
+                    <button class="btn btn-primary" onclick="runProcessSimulation('all')">运行到结束</button>
+                </div>
+            </div>
+            <div class="mb-3">
+                当前时间: <span id="process-current-time" class="fw-bold">0</span>s |
+                当前运行进程: <span id="process-running-name" class="fw-bold text-primary">无</span>
+            </div>
+            <!-- PCB 表格 -->
+            <table class="table table-bordered table-hover">
+                <thead class="table-light">
+                <tr><th>进程名</th><th>状态</th><th>到达时间</th><th>服务时间</th><th>已运行时间</th><th>剩余时间</th><th>优先级</th><th>操作</th></tr>
+                </thead>
+                <tbody id="process-table-body">
+                <!-- 动态加载进程数据 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 模块2：存储器管理 -->
+    <div id="memory" class="card shadow module-card">
+        <div class="card-header bg-success text-white">存储器管理 (128K 内存模拟)</div>
+        <div class="card-body">
+            <div class="alert alert-info">总内存: 128K | OS占用: 4K | 用户空间: 124K (从4K开始)</div>
+
+            <!-- 分区模式选择 -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="btn-group" role="group">
+                        <input type="radio" class="btn-check" name="partitionMode" id="fixedPartition" autocomplete="off" onchange="switchPartitionMode(true)">
+                        <label class="btn btn-outline-primary" for="fixedPartition">固定分区</label>
+
+                        <input type="radio" class="btn-check" name="partitionMode" id="variablePartition" autocomplete="off" checked onchange="switchPartitionMode(false)">
+                        <label class="btn btn-outline-primary" for="variablePartition">可变分区</label>
+                    </div>
+                </div>
+                <div class="col-md-6 text-end">
+                    <button class="btn btn-danger" onclick="resetMemory()">重置内存</button>
+                </div>
+            </div>
+
+            <!-- 固定分区设置 -->
+            <div id="fixedPartitionSettings" class="card mb-3" style="display: none;">
+                <div class="card-header">固定分区设置</div>
+                <div class="card-body">
+                    <div class="input-group mb-2">
+                        <span class="input-group-text">分区大小 (K)</span>
+                        <input type="text" class="form-control" id="partition-sizes" placeholder="例如: 4,8,16,32,64" value="4,8,16,32,64">
+                        <button class="btn btn-secondary" onclick="applyFixedPartitionSettings()">应用设置</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 内存条可视化 -->
+            <h5>内存分布图：</h5>
+            <div class="memory-bar mb-4" id="memory-visualization">
+                <!-- 动态加载内存块 -->
+            </div>
+            <div class="d-flex justify-content-between text-muted small mt-2">
+                <span>0K</span>
+                <span>128K</span>
+            </div>
+
+            <!-- 内存分配请求 -->
+            <div class="card mb-3">
+                <div class="card-header">内存分配请求</div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="mem-job-id" class="form-label">作业ID</label>
+                                <input type="number" class="form-control" id="mem-job-id" placeholder="作业ID" value="1">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="mem-job-size" class="form-label">作业大小(K)</label>
+                                <input type="number" class="form-control" id="mem-job-size" placeholder="作业大小(K)" value="10">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="mem-algo-select" class="form-label">分配算法</label>
+                        <select class="form-select" id="mem-algo-select">
+                            <option value="FF">首次适应 (FF)</option>
+                            <option value="BF">最佳适应 (BF)</option>
+                            <option value="WF">最坏适应 (WF)</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary w-100" onclick="allocateMemoryByJob()">分配内存</button>
+                </div>
+            </div>
+
+            <!-- 内存回收操作区 -->
+            <div class="row mt-4">
+                <div class="col-md-6 offset-md-3">
+                    <div class="input-group">
+                        <span class="input-group-text">回收内存</span>
+                        <input type="number" class="form-control" id="mem-deallocate-jobid" placeholder="作业ID" value="1">
+                        <button class="btn btn-warning" onclick="deallocateMemory()">回收</button>
+                    </div>
+                </div>
+            </div>
+
+
+        </div>
+    </div>
+
+    <!-- 模块3：虚拟存储器 -->
+    <div id="vm" class="card shadow module-card">
+        <div class="card-header bg-warning text-dark">虚拟存储器 (页面置换)</div>
+        <div class="card-body">
+            <!-- 页面访问序列输入区 -->
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>页面访问序列输入</span>
+                    <div>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="toggleVMInputMode('manual')" id="vm-manual-mode-btn">手动输入</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="toggleVMInputMode('file')" id="vm-file-mode-btn">文件导入</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- 手动输入模式 -->
+                    <div id="vm-manual-input">
+                        <div class="mb-3">
+                            <label class="form-label">页面访问序列 (逗号分隔，例如: 7,0,1,2,0,3,0,4)</label>
+                            <input type="text" class="form-control" value="7,0,1,2,0,3,0,4" id="vm-pages-input">
+                        </div>
+                    </div>
+
+                    <!-- 文件导入模式 -->
+                    <div id="vm-file-input" style="display: none;">
+                        <div class="mb-3">
+                            <label for="vm-file-upload" class="form-label">上传页面访问序列文件 (TXT格式)</label>
+                            <input class="form-control" type="file" id="vm-file-upload" accept=".txt" onchange="handleVMFileUpload(event)">
+                            <div class="form-text">支持TXT格式文件，第一行为页面访问序列，用逗号分隔</div>
+                        </div>
+                        <div id="vm-file-content" class="border rounded p-2 mb-3" style="min-height: 100px; max-height: 200px; overflow-y: auto; display: none;">
+                            <!-- 文件内容预览 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">物理块数</label>
+                    <input type="number" class="form-control" id="vm-blocks-input" value="3">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">置换算法</label>
+                    <select class="form-select" id="vm-algorithm-select">
+                        <option value="FIFO">FIFO (先进先出)</option>
+                        <option value="LRU">LRU (最近最少使用)</option>
+                        <option value="LFU">LFU (最近最不常用)</option>
+                    </select>
+                </div>
+            </div>
+            <button class="btn btn-primary w-100 mb-3" onclick="runVMSimulation()">执行算法</button>
+
+            <!-- 结果显示区 -->
+            <div class="card mb-3">
+                <div class="card-header">算法执行结果</div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="alert alert-info" id="vm-summary">
+                                <h6>缺页统计</h6>
+                                <p>缺页次数: <span id="vm-page-faults" class="fw-bold">0</span></p>
+                                <p>缺页率: <span id="vm-page-fault-rate" class="fw-bold">0%</span></p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-warning" id="vm-replaced-pages">
+                                <h6>页面置换记录</h6>
+                                <div id="vm-replaced-list">
+                                    <!-- 动态加载被置换的页面 -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <h5 class="mt-4">模拟步骤详情：</h5>
+            <div class="border rounded p-3 bg-light" style="max-height: 400px; overflow-y: auto;" id="vm-steps-log">
+                <!-- 动态加载模拟步骤 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 模块4：文件/磁盘管理 -->
+    <div id="disk" class="card shadow module-card">
+        <div class="card-header bg-info text-white">文件管理 (磁盘移臂调度)</div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">当前磁道位置</label>
+                        <input type="number" class="form-control" id="disk-current-track-input" value="100">
+                    </div>
+                    <!-- 磁道请求序列输入区 -->
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span>磁道请求序列输入</span>
+                            <div>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="toggleDiskInputMode('manual')" id="disk-manual-mode-btn">手动输入</button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="toggleDiskInputMode('file')" id="disk-file-mode-btn">文件导入</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <!-- 手动输入模式 -->
+                            <div id="disk-manual-input">
+                                <div class="mb-3">
+                                    <label class="form-label">请求磁道序列 (逗号分隔)</label>
+                                    <textarea class="form-control" rows="3" id="disk-sequence-input">55,58,39,18,90,160,150,38,184</textarea>
+                                </div>
+                            </div>
+
+                            <!-- 文件导入模式 -->
+                            <div id="disk-file-input" style="display: none;">
+                                <div class="mb-3">
+                                    <label for="disk-file-upload" class="form-label">上传磁道请求序列文件 (TXT格式)</label>
+                                    <input class="form-control" type="file" id="disk-file-upload" accept=".txt" onchange="handleDiskFileUpload(event)">
+                                    <div class="form-text">支持TXT格式文件，第一行为磁道请求序列，用逗号分隔</div>
+                                </div>
+                                <div id="disk-file-content" class="border rounded p-2 mb-3" style="min-height: 100px; max-height: 200px; overflow-y: auto; display: none;">
+                                    <!-- 文件内容预览 -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">调度算法</label>
+                        <select class="form-select" id="disk-algorithm-select">
+                            <option value="FCFS">FCFS (先来先服务)</option>
+                            <option value="SSTF">SSTF (最短寻道时间优先)</option>
+                            <option value="SCAN">SCAN (电梯)</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary w-100" onclick="runDiskSimulation()">生成轨迹图</button>
+                </div>
+                <div class="col-md-8">
+                    <!-- 结果显示区 -->
+                    <div class="card mb-3">
+                        <div class="card-header">算法执行结果</div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="alert alert-info">
+                                        <h6>移动道数统计</h6>
+                                        <p>总移动道数: <span id="disk-total-movement" class="fw-bold">0</span></p>
+                                        <p>平均寻道距离: <span id="disk-average-seek" class="fw-bold">0</span></p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="alert alert-warning">
+                                        <h6>磁道服务顺序</h6>
+                                        <div id="disk-service-order">
+                                            <!-- 动态加载磁道服务顺序 -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h5 class="mb-3">磁道服务顺序</h5>
+                    <div class="card">
+                        <div class="card-body">
+                            <div id="disk-service-order-detail" class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                                <!-- 动态加载磁道服务顺序详情 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 后端 API 基础 URL
+    const BASE_URL = 'http://localhost:8080/api'; // 请确保你的 Spring Boot 后端运行在 8080 端口
+
+    /**
+     * 通用响应处理函数
+     * 检查 HTTP 状态码和后端业务逻辑状态 (Result.success)
+     * @param {Response} response - fetch API 返回的 Response 对象
+     * @returns {Promise<Object>} - 后端 Result 对象的 data 字段，如果成功；否则抛出错误。
+     */
+    async function handleResponse(response) {
+        // 1. 检查 HTTP 状态码
+        if (!response.ok) {
+            const errorText = await response.text();
+            alert(`网络或服务器错误: ${response.status} - ${errorText}`);
+            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        }
+
+        // 2. 解析 JSON 响应
+        const jsonResult = await response.json();
+
+        // 3. 检查后端业务逻辑状态 (根据你的 Result 类)
+        if (jsonResult && jsonResult.success === false) {
+            alert(`操作失败: ${jsonResult.msg || '未知错误'}`);
+            throw new Error(`Backend logic error: ${jsonResult.msg}`);
+        }
+
+        // 如果 HTTP 状态码和业务逻辑都成功，则返回整个 Result 对象
+        // 调用方可以根据需要访问 result.data, result.msg 等
+        return jsonResult;
+    }
+
+    // --- 模块切换逻辑 ---
+    let currentModule = 'process'; // 记录当前激活的模块
+    function switchModule(moduleId, event) {
+        // 隐藏所有卡片
+        document.querySelectorAll('.module-card').forEach(el => el.classList.remove('active-module'));
+        // 移除所有导航激活状态
+        document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+
+        // 显示选中的
+        document.getElementById(moduleId).classList.add('active-module');
+        // 激活当前按钮样式
+        event.target.classList.add('active');
+
+        currentModule = moduleId; // 更新当前模块
+        // 切换模块时加载初始数据
+        if (moduleId === 'process') loadProcessList();
+        if (moduleId === 'memory') loadMemoryStatus();
+        // VM 和 Disk 模块在点击“执行/生成”时才触发模拟，无需初始加载
+    }
+
+    // --- 模块1：进程管理 ---
+    async function addProcess() {
+        const name = document.getElementById('process-name-input').value;
+        const arriveTime = parseInt(document.getElementById('process-arrive-time-input').value);
+        const serviceTime = parseInt(document.getElementById('process-service-time-input').value);
+        const priority = parseInt(document.getElementById('process-priority-input').value) || 1;
+
+        if (!name || isNaN(arriveTime) || isNaN(serviceTime) || serviceTime <= 0) {
+            alert('请填写有效的进程信息！');
+            return;
+        }
+
+        try {
+            const result = await fetch(`${BASE_URL}/process/add`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, arriveTime, serviceTime, priority })
+            }).then(handleResponse); // 使用修改后的 handleResponse
+
+            alert(result.msg || '进程创建成功！'); // 使用后端返回的 msg
+            document.getElementById('process-name-input').value = ''; // 清空输入
+            loadProcessList(); // 刷新进程列表
+        } catch (error) {
+            console.error('创建进程失败:', error);
+            // handleResponse 已经弹窗，这里可以做其他非弹窗处理
+        }
+    }
+
+    async function runProcessSimulation(mode) {
+        const algorithm = document.getElementById('process-algorithm-select').value;
+        try {
+            const result = await fetch(`${BASE_URL}/process/run`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ algorithm, mode }) // mode: 'step' 或 'all'
+            }).then(handleResponse);
+
+            updateProcessTable(result.data); // result.data 包含 ProcessSimulationState
+        } catch (error) {
+            console.error('运行模拟失败:', error);
+        }
+    }
+
+    async function resetProcessSimulation() {
+        if (!confirm('确定要重置进程模拟吗？所有进程和状态将被清空！')) {
+            return;
+        }
+        try {
+            const result = await fetch(`${BASE_URL}/process/reset`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            }).then(handleResponse);
+
+            alert(result.msg || '进程模拟已重置！');
+            // 重置前端显示为初始状态
+            updateProcessTable({ currentTime: 0, runningProcess: null, processes: [] });
+        } catch (error) {
+            console.error('重置模拟失败:', error);
+        }
+    }
+
+    async function loadProcessList() {
+        try {
+            const result = await fetch(`${BASE_URL}/process/list`)
+                .then(handleResponse);
+
+            updateProcessTable(result.data); // result.data 包含 ProcessSimulationState
+        } catch (error) {
+            console.error('加载进程列表失败:', error);
+        }
+    }
+
+    function updateProcessTable(simulationState) { // 接收 ProcessSimulationState 对象
+        const tbody = document.getElementById('process-table-body');
+        tbody.innerHTML = ''; // 清空现有内容
+
+        document.getElementById('process-current-time').textContent = simulationState.currentTime || 0;
+        document.getElementById('process-running-name').textContent = simulationState.runningProcess ? simulationState.runningProcess.name : '无';
+
+        if (simulationState.processes && simulationState.processes.length > 0) {
+            simulationState.processes.forEach(p => {
+                const row = tbody.insertRow();
+                const stateBadge = `
+                    <span class="badge ${
+                    p.state === 'Running' ? 'bg-success' :
+                        p.state === 'Ready' ? 'bg-warning text-dark' :
+                            p.state === 'Waiting' ? 'bg-info text-dark' :
+                                p.state === 'Terminated' ? 'bg-secondary' : 'bg-light text-dark'
+                }">${p.state}</span>
+                `;
+                // 根据算法决定是否显示优先级
+                const algorithm = document.getElementById('process-algorithm-select').value;
+                const priorityDisplay = algorithm === 'Priority' ? p.priority || 0 : '-';
+
+                row.innerHTML = `
+                    <td>${p.name}</td>
+                    <td>${stateBadge}</td>
+                    <td>${p.arriveTime}</td>
+                    <td>${p.serviceTime}</td>
+                    <td>${p.executedTime || 0}</td>
+                    <td>${p.remainingTime || 0}</td>
+                    <td>${priorityDisplay}</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" onclick="terminateProcess('${p.name}')" ${p.state === 'Terminated' ? 'disabled' : ''}>终止</button>
+                    </td>
+                `;
+            });
+        } else {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">暂无进程</td></tr>';
+        }
+    }
+
+    async function terminateProcess(processName) {
+        if (!confirm(`确定要终止进程 ${processName} 吗？`)) {
+            return;
+        }
+        try {
+            const result = await fetch(`${BASE_URL}/process/terminate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: processName })
+            }).then(handleResponse);
+
+            alert(result.msg || `进程 ${processName} 已终止！`);
+            loadProcessList(); // 刷新进程列表
+        } catch (error) {
+            console.error('终止进程失败:', error);
+        }
+    }
+
+    // --- 模块2：存储器管理 ---
+
+    // 切换分区模式
+    async function switchPartitionMode(isFixed) {
+        try {
+            const partitionSizes = isFixed ?
+                document.getElementById('partition-sizes').value.split(',').map(Number) :
+                null;
+
+            const result = await fetch(`${BASE_URL}/memory/initialize`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isFixed, partitionSizes })
+            }).then(handleResponse);
+
+            // 显示/隐藏固定分区设置
+            document.getElementById('fixedPartitionSettings').style.display =
+                isFixed ? 'block' : 'none';
+
+            updateMemoryVisualization(result.data);
+        } catch (error) {
+            console.error('切换分区模式失败:', error);
+        }
+    }
+
+    // 应用固定分区设置
+    async function applyFixedPartitionSettings() {
+        const partitionSizesInput = document.getElementById('partition-sizes').value;
+        const partitionSizes = partitionSizesInput.split(',').map(Number);
+
+        if (partitionSizes.some(size => isNaN(size) || size <= 0)) {
+            alert('请输入有效的分区大小，用逗号分隔！');
+            return;
+        }
+
+        try {
+            const result = await fetch(`${BASE_URL}/memory/initialize`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isFixed: true, partitionSizes })
+            }).then(handleResponse);
+
+            updateMemoryVisualization(result.data);
+        } catch (error) {
+            console.error('应用固定分区设置失败:', error);
+        }
+    }
+
+    // 重置内存
+    async function resetMemory() {
+        if (!confirm('确定要重置内存吗？所有已分配的内存将被回收！')) {
+            return;
+        }
+
+        const isFixed = document.getElementById('fixedPartition').checked;
+
+        try {
+            const partitionSizes = isFixed ?
+                document.getElementById('partition-sizes').value.split(',').map(Number) :
+                null;
+
+            const result = await fetch(`${BASE_URL}/memory/initialize`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isFixed, partitionSizes })
+            }).then(handleResponse);
+
+            updateMemoryVisualization(result.data);
+        } catch (error) {
+            console.error('重置内存失败:', error);
+        }
+    }
+
+
+    async function allocateMemory() {
+        const size = parseFloat(document.getElementById('mem-allocate-size').value);
+        const algorithm = document.getElementById('mem-allocate-algo').value;
+
+        if (isNaN(size) || size <= 0) {
+            alert('请填写有效的内存大小！');
+            return;
+        }
+
+        try {
+            const result = await fetch(`${BASE_URL}/memory/allocate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ size, algorithm })
+            }).then(handleResponse);
+
+            alert(result.msg || `成功分配 ${size}K 内存！`);
+            loadMemoryStatus(); // 刷新内存状态
+        } catch (error) {
+            console.error('分配内存失败:', error);
+        }
+    }
+
+    async function deallocateMemory() {
+        const jobId = parseInt(document.getElementById('mem-deallocate-jobid').value);
+
+        if (isNaN(jobId) || jobId <= 0) {
+            alert('请填写有效的作业ID！');
+            return;
+        }
+
+        try {
+            const result = await fetch(`${BASE_URL}/memory/free`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jobId })
+            }).then(handleResponse);
+
+            alert(result.msg || `成功回收作业ID为 ${jobId} 的内存！`);
+            loadMemoryStatus(); // 刷新内存状态
+        } catch (error) {
+            console.error('回收内存失败:', error);
+        }
+    }
+
+    async function loadMemoryStatus() {
+        try {
+            const result = await fetch(`${BASE_URL}/memory/status`)
+                .then(handleResponse);
+
+            updateMemoryVisualization(result.data); // result.data 包含 List<MemoryBlock>
+        } catch (error) {
+            console.error('加载内存状态失败:', error);
+        }
+    }
+
+    function updateMemoryVisualization(memoryBlocks) { // 接收 List<MemoryBlock>
+        const visualizationDiv = document.getElementById('memory-visualization');
+        visualizationDiv.innerHTML = ''; // 清空现有内容
+
+        const totalMemory = 128; // 总内存 128K
+
+        if (memoryBlocks && memoryBlocks.length > 0) {
+            memoryBlocks.forEach(block => {
+                const widthPercent = (block.size / totalMemory) * 100;
+                let bgColor = '';
+                let blockName = '';
+                let textColor = 'text-white';
+
+                if (block.status === 'OS') {
+                    bgColor = 'bg-dark';
+                    blockName = 'OS';
+                } else if (block.status === 'FREE') {
+                    bgColor = 'bg-success';
+                    blockName = '空闲';
+                } else if (block.status === 'BUSY') {
+                    bgColor = 'bg-primary';
+                    blockName = `Job ${block.jobId}`;
+                } else {
+                    bgColor = 'bg-secondary';
+                    blockName = '未知';
+                }
+
+                const tooltipContent = `
+                    起始地址: ${block.start}K<br>
+                    大小: ${block.size}K<br>
+                    状态: ${block.status}
+                    ${block.jobId ? `<br>作业ID: ${block.jobId}` : ''}
+                `;
+
+                const blockDiv = document.createElement('div');
+                blockDiv.className = `mem-block ${bgColor} ${textColor}`;
+                blockDiv.style.width = `${widthPercent}%`;
+                blockDiv.innerHTML = `
+                    <span>${block.size}K</span>
+                    <span class="tooltip-text">${tooltipContent}</span>
+                `;
+                visualizationDiv.appendChild(blockDiv);
+            });
+        } else {
+            visualizationDiv.innerHTML = '<div class="mem-block bg-secondary" style="width: 100%;">无法加载内存状态</div>';
+        }
+    }
+
+    // --- 模块3：虚拟存储器 ---
+    async function runVMSimulation() {
+        const pagesInput = document.getElementById('vm-pages-input').value;
+        const blocks = parseInt(document.getElementById('vm-blocks-input').value);
+        const algorithm = document.getElementById('vm-algorithm-select').value;
+
+        if (!pagesInput || isNaN(blocks) || blocks <= 0) {
+            alert('请填写有效的页面访问序列和物理块数！');
+            return;
+        }
+        const pages = pagesInput.split(',').map(Number); // 转换为数字数组
+
+        try {
+            const result = await fetch(`${BASE_URL}/vm/simulate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pages, blocks, algorithm })
+            }).then(handleResponse);
+
+            updateVMResults(result.data); // result.data 包含 VMSimulationResult
+        } catch (error) {
+            console.error('虚拟存储器模拟失败:', error);
+        }
+    }
+
+    function updateVMResults(simulationResult) { // 接收 VMSimulationResult
+        const stepsLogDiv = document.getElementById('vm-steps-log');
+        stepsLogDiv.innerHTML = ''; // 清空现有日志
+
+        // 更新缺页统计
+        document.getElementById('vm-page-faults').textContent = simulationResult.totalPageFaults;
+        document.getElementById('vm-page-fault-rate').textContent = `${(simulationResult.pageFaultRate * 100).toFixed(2)}%`;
+
+        // 更新页面置换记录
+        const replacedListDiv = document.getElementById('vm-replaced-list');
+        replacedListDiv.innerHTML = ''; // 清空现有记录
+
+        // 收集所有被置换的页面
+        const replacedPages = [];
+        if (simulationResult.steps && simulationResult.steps.length > 0) {
+            simulationResult.steps.forEach(step => {
+                if (step.status.includes('淘汰')) {
+                    // 提取被置换的页面号
+                    const match = step.status.match(/淘汰页面(\d+)/);
+                    if (match) {
+                        replacedPages.push(match[1]);
+                    }
+                }
+            });
+        }
+
+        if (replacedPages.length > 0) {
+            replacedPages.forEach(page => {
+                const pageSpan = document.createElement('span');
+                pageSpan.className = 'badge bg-danger me-1';
+                pageSpan.textContent = page;
+                replacedListDiv.appendChild(pageSpan);
+            });
+        } else {
+            replacedListDiv.innerHTML = '<span class="text-muted">无页面被置换</span>';
+        }
+
+        // 显示模拟步骤
+        if (simulationResult.steps && simulationResult.steps.length > 0) {
+            simulationResult.steps.forEach((step, index) => {
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry';
+
+                let statusClass = '';
+                if (step.status.includes('MISS')) {
+                    statusClass = 'status-miss';
+                } else if (step.status.includes('HIT')) {
+                    statusClass = 'status-hit';
+                } else if (step.status.includes('淘汰')) {
+                    statusClass = 'status-replace';
+                }
+
+                const framesHtml = step.frames.map(f => `<div class="log-frame-block">${f === -1 ? '-' : f}</div>`).join('');
+
+                logEntry.innerHTML = `
+                    <span class="text-muted small">步骤 ${index + 1}:</span>
+                    <span class="log-page">访问 ${step.page}</span>
+                    <div class="log-frames">${framesHtml}</div>
+                    <span class="log-status ${statusClass}">${step.status}</span>
+                `;
+                stepsLogDiv.appendChild(logEntry);
+            });
+        } else {
+            stepsLogDiv.innerHTML = '<p class="text-muted text-center">暂无模拟步骤。</p>';
+        }
+    }
+
+    // --- 模块4：文件/磁盘管理 ---
+    async function runDiskSimulation() {
+        const currentTrack = parseInt(document.getElementById('disk-current-track-input').value);
+        const sequenceInput = document.getElementById('disk-sequence-input').value;
+        const algorithm = document.getElementById('disk-algorithm-select').value;
+
+        if (isNaN(currentTrack) || !sequenceInput) {
+            alert('请填写有效的当前磁道位置和请求序列！');
+            return;
+        }
+        const trackSequence = sequenceInput.split(',').map(Number); // 转换为数字数组
+
+        try {
+            const result = await fetch(`${BASE_URL}/disk/schedule`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ startTrack: currentTrack, trackSequence, algorithm })
+            }).then(handleResponse);
+
+            updateDiskChart(result.data); // result.data 包含 DiskScheduleResult
+        } catch (error) {
+            console.error('磁盘调度模拟失败:', error);
+        }
+    }
+
+    function updateDiskChart(scheduleResult) { // 接收 DiskResult
+        // 更新总移动道数
+        document.getElementById('disk-total-movement').textContent = scheduleResult.totalMovement || 0;
+
+        // 计算并更新平均寻道距离
+        if (scheduleResult.serviceOrder && scheduleResult.serviceOrder.length > 0) {
+            const averageSeek = (scheduleResult.totalMovement / scheduleResult.serviceOrder.length).toFixed(2);
+            document.getElementById('disk-average-seek').textContent = averageSeek;
+        } else {
+            document.getElementById('disk-average-seek').textContent = '0';
+        }
+
+        // 更新磁道服务顺序
+        const serviceOrderDiv = document.getElementById('disk-service-order');
+        serviceOrderDiv.innerHTML = ''; // 清空现有顺序
+
+        if (scheduleResult.serviceOrder && scheduleResult.serviceOrder.length > 0) {
+            // 显示服务顺序
+            const orderText = scheduleResult.serviceOrder.join(' → ');
+            serviceOrderDiv.innerHTML = `<span class="fw-bold">${orderText}</span>`;
+        } else {
+            serviceOrderDiv.innerHTML = '<span class="text-muted">无服务顺序</span>';
+        }
+        
+        // 更新磁道服务顺序详情
+        const serviceOrderDetailDiv = document.getElementById('disk-service-order-detail');
+        serviceOrderDetailDiv.innerHTML = ''; // 清空现有内容
+        
+        if (scheduleResult.serviceOrder && scheduleResult.serviceOrder.length > 0) {
+            let htmlContent = '<div class="mb-2"><strong>磁道访问顺序：</strong></div>';
+            htmlContent += '<div class="d-flex flex-wrap gap-2 mb-3">';
+            
+            scheduleResult.serviceOrder.forEach((track, index) => {
+                htmlContent += `<span class="badge bg-primary fs-6">${index + 1}. ${track}</span>`;
+            });
+            
+            htmlContent += '</div>';
+            htmlContent += `<div class="mt-3"><strong>总移动道数：</strong> ${scheduleResult.totalMovement}</div>`;
+            
+            serviceOrderDetailDiv.innerHTML = htmlContent;
+        } else {
+            serviceOrderDetailDiv.innerHTML = '<span class="text-muted">无服务顺序</span>';
+        }
+    }
+
+    // --- 存储器管理模块的内存分配函数 ---
+    function allocateMemoryByJob() {
+        const jobId = parseInt(document.getElementById('mem-job-id').value);
+        const size = parseFloat(document.getElementById('mem-job-size').value);
+        const algorithm = document.getElementById('mem-algo-select').value;
+
+        if (isNaN(jobId) || isNaN(size) || size <= 0) {
+            alert('请填写有效的作业ID和大小！');
+            return;
+        }
+
+        try {
+            fetch(`${BASE_URL}/memory/allocate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jobId, size, algorithm })
+            })
+                .then(response => response.json())
+                .then(result => {
+                    if (result.success) {
+                        alert(result.msg || `作业${jobId}分配成功！`);
+                        // 刷新内存状态
+                        loadMemoryStatus();
+                        // 递增作业ID，方便下一次分配
+                        document.getElementById('mem-job-id').value = jobId + 1;
+                    } else {
+                        alert(`作业${jobId}分配失败: ${result.msg}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('分配内存失败:', error);
+                    alert(`作业${jobId}分配失败，请检查网络连接！`);
+                });
+        } catch (error) {
+            console.error('分配内存失败:', error);
+        }
+    }
+
+    // --- 虚拟存储器模块的文件处理函数 ---
+    function toggleVMInputMode(mode) {
+        const manualInput = document.getElementById('vm-manual-input');
+        const fileInput = document.getElementById('vm-file-input');
+        const manualBtn = document.getElementById('vm-manual-mode-btn');
+        const fileBtn = document.getElementById('vm-file-mode-btn');
+
+        if (mode === 'manual') {
+            manualInput.style.display = 'block';
+            fileInput.style.display = 'none';
+            manualBtn.classList.add('active');
+            fileBtn.classList.remove('active');
+        } else {
+            manualInput.style.display = 'none';
+            fileInput.style.display = 'block';
+            manualBtn.classList.remove('active');
+            fileBtn.classList.add('active');
+        }
+    }
+
+    function handleVMFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const content = e.target.result;
+            const fileContentDiv = document.getElementById('vm-file-content');
+
+            fileContentDiv.textContent = content;
+            fileContentDiv.style.display = 'block';
+
+            // 解析第一行作为页面访问序列
+            const lines = content.trim().split('\n');
+            if (lines.length > 0) {
+                const pageSequence = lines[0].trim();
+                document.getElementById('vm-pages-input').value = pageSequence;
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    // --- 文件/磁盘管理模块的文件处理函数 ---
+    function toggleDiskInputMode(mode) {
+        const manualInput = document.getElementById('disk-manual-input');
+        const fileInput = document.getElementById('disk-file-input');
+        const manualBtn = document.getElementById('disk-manual-mode-btn');
+        const fileBtn = document.getElementById('disk-file-mode-btn');
+
+        if (mode === 'manual') {
+            manualInput.style.display = 'block';
+            fileInput.style.display = 'none';
+            manualBtn.classList.add('active');
+            fileBtn.classList.remove('active');
+        } else {
+            manualInput.style.display = 'none';
+            fileInput.style.display = 'block';
+            manualBtn.classList.remove('active');
+            fileBtn.classList.add('active');
+        }
+    }
+
+    function handleDiskFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const content = e.target.result;
+            const fileContentDiv = document.getElementById('disk-file-content');
+
+            fileContentDiv.textContent = content;
+            fileContentDiv.style.display = 'block';
+
+            // 解析第一行作为磁道请求序列
+            const lines = content.trim().split('\n');
+            if (lines.length > 0) {
+                const trackSequence = lines[0].trim();
+                document.getElementById('disk-sequence-input').value = trackSequence;
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    // 页面加载完成后，默认加载进程列表
+    document.addEventListener('DOMContentLoaded', () => {
+        loadProcessList();
+
+        // 初始化输入模式按钮状态
+        document.getElementById('vm-manual-mode-btn').classList.add('active');
+        document.getElementById('disk-manual-mode-btn').classList.add('active');
+    });
+
+</script>
+
+</body>
+</html>
