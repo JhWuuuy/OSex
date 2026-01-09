@@ -35,3 +35,41 @@ OsEx (Operating System Exercise) 是一个基于 Java Spring Boot 开发的操�
 
 ## 📂 项目结构 (Project Structure)
 
+```text
+OsEx
+├── src
+│   └── main
+│       ├── java
+│       │   └── com.os
+│       │       ├── OsExApplication.java    # 项目启动入口
+│       │       ├── controller              # 控制层 (API 接口)
+│       │       │   ├── DiskManageController.java
+│       │       │   ├── MemoryController.java
+│       │       │   ├── ProcessController.java
+│       │       │   └── VirtualMemoryController.java
+│       │       ├── service                 # 业务逻辑层
+│       │       │   ├── impl                # 业务逻辑实现
+│       │       │   │   ├── DiskManageServiceImpl.java
+│       │       │   │   ├── MemoryServiceImpl.java
+│       │       │   │   ├── ProcessServiceImpl.java
+│       │       │   │   └── VirtualMemoryServiceImpl.java
+│       │       │   ├── DiskManageService.java
+│       │       │   ├── MemoryService.java
+│       │       │   ├── ProcessService.java
+│       │       │   └── VirtualMemoryService.java
+│       │       ├── entity                  # 实体类 (PCB, MemoryBlock等)
+│       │       │   ├── ProcessPCB.java
+│       │       │   ├── MemoryBlock.java
+│       │       │   ├── DiskPath.java
+│       │       │   └── ...
+│       │       └── dto                     # 数据传输对象 (Request/Response)
+│       │           ├── DiskDTO
+│       │           ├── MemoryDTO
+│       │           ├── ProcessDTO
+│       │           └── VirtualMemoryDTO
+│       └── resources
+│           ├── static                      # 静态资源
+│           │   └── page.html               # 前端仿真页面
+│           ├── templates                   # 页面模板
+│           └── application.yaml            # 配置文件
+└── pom.xml                                 # Maven 依赖配置
